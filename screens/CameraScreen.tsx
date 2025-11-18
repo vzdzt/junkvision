@@ -5,8 +5,71 @@ import * as tf from '@tensorflow/tfjs';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { CameraScreenNavigationProp } from '../types/navigation';
 
+// Pricing database - costs per item category
+const ITEM_PRICING = {
+  furniture: {
+    chair: { disposalCost: 35, transportCost: 25 },
+    couch: { disposalCost: 150, transportCost: 75 },
+    table: { disposalCost: 85, transportCost: 45 },
+    bed: { disposalCost: 120, transportCost: 60 },
+  },
+  appliances: {
+    refrigerator: { disposalCost: 200, transportCost: 80 },
+    washing_machine: { disposalCost: 180, transportCost: 70 },
+    microwave: { disposalCost: 45, transportCost: 15 },
+  },
+  electronics: {
+    television: { disposalCost: 95, transportCost: 35 },
+    computer: { disposalCost: 75, transportCost: 25 },
+  }
+};
+
+// Category mapping from COCO-SSD to junk items
+const CATEGORY_MAPPING = {
+  chair: 'chair',
+  couch: 'couch',
+  sofa: 'couch',
+  bed: 'bed',
+  table: 'table',
+  refrigerator: 'refrigerator',
+  microwave: 'microwave',
+  television: 'television',
+  laptop: 'computer',
+  computer: 'computer',
+};
+
 type CameraScreenProps = {
   navigation: CameraScreenNavigationProp;
+};
+
+// Calculate total estimate cost based on detected items
+const calculateEstimateTotal = (detections: any[]) => {
+  let totalCost = 0;
+  let itemBreakdown: { [key: string]: { count: number; cost: number } } = {};
+
+  detections.filter((pred: any) => pred.score > 0.4).forEach((pred: any) => {
+    const item = CATEGORY_MAPPING[pred.class as keyof typeof CATEGORY_MAPPING];
+    if (item) {
+      // Find item in pricing database
+      for (const category of Object.values(ITEM_PRICING)) {
+        const categoryGroup = category as any;
+        if (categoryGroup[item]) {
+          const pricing = categoryGroup[item];
+          const cost = pricing.disposalCost + pricing.transportCost;
+          totalCost += cost;
+
+          const key = `${item} (${Math.round(pred.score * 100)}%)`;
+          itemBreakdown[key] = {
+            count: (itemBreakdown[key]?.count || 0) + 1,
+            cost: cost
+          };
+          break;
+        }
+      }
+    }
+  });
+
+  return { totalCost, itemBreakdown };
 };
 
 export default function CameraScreen({ navigation }: CameraScreenProps) {
@@ -70,17 +133,18 @@ export default function CameraScreen({ navigation }: CameraScreenProps) {
         const predictions = await processImageWithAI(photo.uri);
         console.log('AI predictions:', predictions);
 
-        // Extract relevant junk items and their confidence
-        const junkItems = predictions
-          .filter((pred: any) => pred.score > 0.3) // Confidence threshold
-          .map((pred: any) => `${pred.class} (${Math.round(pred.score * 100)}%)`)
-          .slice(0, 5); // Top 5 detections
+        // Calculate pricing for detected items
+        const { totalCost, itemBreakdown } = calculateEstimateTotal(predictions);
 
-        const itemCount = predictions.filter((pred: any) => pred.score > 0.5).length;
-        const estimateMessage = `Detected ${itemCount} items: ${junkItems.join(', ')}`;
+        const itemCount = Object.keys(itemBreakdown).length;
+        const breakdownText = Object.entries(itemBreakdown)
+          .map(([item, details]) => `${item}: $${(details as { cost: number }).cost}`)
+          .join('\n');
+
+        const estimateMessage = `Found ${itemCount} items:\n${breakdownText}\n\nTotal Estimate: $${totalCost}`;
 
         Alert.alert(
-          'AI Analysis Complete! 🤖',
+          'JunkVizion Estimate! 💰',
           estimateMessage,
           [{ text: 'Take Another Photo' }, { text: 'Done', onPress: () => navigation.goBack() }]
         );
