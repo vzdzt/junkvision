@@ -81,16 +81,22 @@ junkvision/
 
 ### Open Issues
 1. **Camera Integration**
-   - Status: In Progress
-   - Details: Basic camera functionality implemented with photo capture. AI processing pending.
+   - Status: Completed ✅
+   - Details: Camera functionality with photo capture and TensorFlow.js object detection implemented
    - Responsible: Dev team
    - Priority: High
 
-2. **Google ML Kit Setup**
+2. **Pricing Algorithm**
    - Status: Not started
-   - Details: Configure ML Kit API, implement object detection
+   - Details: Convert AI detections to volume/weight estimates and pricing logic
    - Responsible: Dev team
    - Priority: High
+
+3. **Mobile Testing**
+   - Status: Pending
+   - Details: Test camera interface on iOS Simulator once Xcode installed
+   - Responsible: Dev team
+   - Priority: Medium
 
 ### Resolved Issues
 1. **Project Foundation Setup** ✅
@@ -104,6 +110,7 @@ junkvision/
 
 ### Recent Updates
 - **Nov 17, 2025:** Foundation project created with Expo TypeScript template
+- **Nov 17, 2025:** AI vision pipeline integrated with TensorFlow.js COCO-SSD object detection
 - **Nov 17, 2025:** Git repository initialized and pushed to GitHub
 - **Nov 17, 2025:** React Navigation dependencies installed
 - **Nov 17, 2025:** Development server verified working (web)
