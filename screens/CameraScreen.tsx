@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { Camera, CameraView } from 'expo-camera';
+import * as tf from '@tensorflow/tfjs';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { CameraScreenNavigationProp } from '../types/navigation';
 
 type CameraScreenProps = {
@@ -10,17 +12,53 @@ type CameraScreenProps = {
 export default function CameraScreen({ navigation }: CameraScreenProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
+  const [isProcessing, setIsProcessing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
 
   React.useEffect(() => {
     (async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === 'granted');
+
+      // Load TensorFlow.js model
+      await tf.ready();
+      console.log('TensorFlow.js loaded');
     })();
   }, []);
 
+  const processImageWithAI = async (imageUri: string) => {
+    try {
+      setIsProcessing(true);
+
+      // Load COCO-SSD model
+      const model = await cocoSsd.load();
+
+      // Create image element from URI
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = imageUri;
+
+      return new Promise<any[]>((resolve, reject) => {
+        img.onload = async () => {
+          try {
+            const predictions = await model.detect(img);
+            resolve(predictions);
+          } catch (error) {
+            reject(error);
+          }
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+      });
+    } catch (error) {
+      console.error('Error loading AI model:', error);
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const takePicture = async () => {
-    if (cameraRef.current) {
+    if (cameraRef.current && !isProcessing) {
       try {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.7,
@@ -28,16 +66,27 @@ export default function CameraScreen({ navigation }: CameraScreenProps) {
         });
         console.log('Photo taken:', photo.uri);
 
-        // TODO: Process with ML Kit here
-        // For now, just show success and navigate back
+        // Process with AI
+        const predictions = await processImageWithAI(photo.uri);
+        console.log('AI predictions:', predictions);
+
+        // Extract relevant junk items and their confidence
+        const junkItems = predictions
+          .filter((pred: any) => pred.score > 0.3) // Confidence threshold
+          .map((pred: any) => `${pred.class} (${Math.round(pred.score * 100)}%)`)
+          .slice(0, 5); // Top 5 detections
+
+        const itemCount = predictions.filter((pred: any) => pred.score > 0.5).length;
+        const estimateMessage = `Detected ${itemCount} items: ${junkItems.join(', ')}`;
+
         Alert.alert(
-          'Photo Captured!',
-          'Image captured successfully. ML processing coming soon!',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          'AI Analysis Complete! 🤖',
+          estimateMessage,
+          [{ text: 'Take Another Photo' }, { text: 'Done', onPress: () => navigation.goBack() }]
         );
       } catch (error) {
-        console.error('Error taking photo:', error);
-        Alert.alert('Error', 'Failed to capture photo. Try again.');
+        console.error('Error processing photo:', error);
+        Alert.alert('Processing Error', 'Failed to analyze image. Camera working, AI processing failed.');
       }
     }
   };
