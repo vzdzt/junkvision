@@ -5,23 +5,68 @@ import * as tf from '@tensorflow/tfjs';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { CameraScreenNavigationProp } from '../types/navigation';
 
-// Pricing database - costs per item category
-const ITEM_PRICING = {
-  furniture: {
-    chair: { disposalCost: 35, transportCost: 25 },
-    couch: { disposalCost: 150, transportCost: 75 },
-    table: { disposalCost: 85, transportCost: 45 },
-    bed: { disposalCost: 120, transportCost: 60 },
+// JunkVizion Pricing Model (based on real Penske 16ft truck rates)
+// Base: $1500 for full truck load (16ft Penske truck)
+// Split: $375 per quarter-section (assumes 4 equal sections)
+//
+// All prices exclude:
+// - Surcharges for heavy/special items
+// - $200 per ton environmental fees
+// - Fuel surcharge (varies by location)
+
+const BASE_PRICING = {
+  // Quarter truck sections ($375 base per section)
+  // Items are categorized by size/space requirements
+  small_items: {
+    // Single items that fit in small space
+    chair: { spaceRequired: 0.25 }, // 1/4 section = $375
+    microwave: { spaceRequired: 0.25 },
+    television: { spaceRequired: 0.25 },
+    computer: { spaceRequired: 0.25 },
+    box: { spaceRequired: 0.25 },
+    trash_can: { spaceRequired: 0.25 },
   },
-  appliances: {
-    refrigerator: { disposalCost: 200, transportCost: 80 },
-    washing_machine: { disposalCost: 180, transportCost: 70 },
-    microwave: { disposalCost: 45, transportCost: 15 },
+
+  medium_items: {
+    // Items requiring medium space (half section)
+    table: { spaceRequired: 0.5 }, // 1/2 section = $750
+    washing_machine: { spaceRequired: 0.5 },
+    bed_frame: { spaceRequired: 0.5 },
   },
-  electronics: {
-    television: { disposalCost: 95, transportCost: 35 },
-    computer: { disposalCost: 75, transportCost: 25 },
+
+  large_items: {
+    // Items requiring full section or more
+    couch: { spaceRequired: 1.0 }, // Full section = $1500
+    refrigerator: { spaceRequired: 1.0 },
+    bed_complete: { spaceRequired: 1.0 }, // Mattress + boxspring
   }
+};
+
+const SURCHARGE_ITEMS = {
+  // Heavy/disposal surcharges ($200-$500 additional per item)
+  heavy_appliances: {
+    refrigerator: { surcharge: 200 },
+    washing_machine: { surcharge: 200 },
+    air_conditioner: { surcharge: 300 },
+  },
+
+  bulky_furniture: {
+    couch: { surcharge: 150 },
+    mattress: { surcharge: 100 },
+    boxspring: { surcharge: 100 },
+    bed_complete: { surcharge: 200 }, // Combined surcharge
+  },
+
+  hazardous: {
+    // Paint, chemicals, cleaning products
+    hazardous_waste: { surcharge: 300 },
+  }
+};
+
+const ENVIRONMENTAL_FEES = {
+  // $200 per ton, estimated at ~2000lbs per section
+  per_ton: 200,
+  estimated_tons_per_section: 1, // ~2000lbs
 };
 
 // Category mapping from COCO-SSD to junk items
@@ -42,34 +87,80 @@ type CameraScreenProps = {
   navigation: CameraScreenNavigationProp;
 };
 
-// Calculate total estimate cost based on detected items
+// Calculate total estimate using JunkVizion pricing model
 const calculateEstimateTotal = (detections: any[]) => {
-  let totalCost = 0;
-  let itemBreakdown: { [key: string]: { count: number; cost: number } } = {};
+  let totalSpaceRequired = 0; // Accumulate space (0-4 sections)
+  let baseCost = 0;
+  let surchargeCost = 0;
+  let environmentalCost = 0;
+
+  let detectedItems: { [key: string]: { count: number, spaceUsed: number, surcharges: number } } = {};
 
   detections.filter((pred: any) => pred.score > 0.4).forEach((pred: any) => {
     const item = CATEGORY_MAPPING[pred.class as keyof typeof CATEGORY_MAPPING];
     if (item) {
-      // Find item in pricing database
-      for (const category of Object.values(ITEM_PRICING)) {
+
+      // Find item in pricing database and calculate space/costs
+      let itemSpace = 0;
+      let itemSurcharges = 0;
+
+      // Check all categories for the item
+      Object.values(BASE_PRICING).forEach(category => {
         const categoryGroup = category as any;
         if (categoryGroup[item]) {
-          const pricing = categoryGroup[item];
-          const cost = pricing.disposalCost + pricing.transportCost;
-          totalCost += cost;
-
-          const key = `${item} (${Math.round(pred.score * 100)}%)`;
-          itemBreakdown[key] = {
-            count: (itemBreakdown[key]?.count || 0) + 1,
-            cost: cost
-          };
-          break;
+          itemSpace = categoryGroup[item].spaceRequired;
         }
+      });
+
+      // Check for surcharges
+      Object.values(SURCHARGE_ITEMS).forEach(category => {
+        const surchargeGroup = category as any;
+        if (surchargeGroup[item]) {
+          itemSurcharges = surchargeGroup[item].surcharge;
+        }
+      });
+
+      // Accumulate totals
+      totalSpaceRequired += itemSpace;
+      surchargeCost += itemSurcharges;
+
+      // Track individual items
+      const itemKey = `${item} (${Math.round(pred.score * 100)}%)`;
+      if (!detectedItems[itemKey]) {
+        detectedItems[itemKey] = {
+          count: 0,
+          spaceUsed: 0,
+          surcharges: 0
+        };
       }
+      detectedItems[itemKey].count += 1;
+      detectedItems[itemKey].spaceUsed += itemSpace;
+      detectedItems[itemKey].surcharges += itemSurcharges;
     }
   });
 
-  return { totalCost, itemBreakdown };
+  // Calculate base cost: $375 per quarter section (up to 4 sections = $1500)
+  // Round up to next quarter for partial sections
+  const sectionsUsed = Math.ceil(totalSpaceRequired * 4); // Convert to quarters
+  baseCost = Math.min(sectionsUsed * 375, 4 * 375); // Cap at full truck
+
+  // Calculate environmental fees: $200 per ton, estimate 1 ton per section
+  const estimatedTons = Math.ceil(totalSpaceRequired);
+  environmentalCost = estimatedTons * ENVIRONMENTAL_FEES.per_ton;
+
+  // Total cost
+  const totalCost = baseCost + surchargeCost + environmentalCost;
+
+  return {
+    totalCost,
+    breakdown: {
+      sectionsUsed: Math.min(sectionsUsed, 4),
+      baseCost,
+      surchargeCost,
+      environmentalCost,
+      detectedItems
+    }
+  };
 };
 
 export default function CameraScreen({ navigation }: CameraScreenProps) {
@@ -133,19 +224,34 @@ export default function CameraScreen({ navigation }: CameraScreenProps) {
         const predictions = await processImageWithAI(photo.uri);
         console.log('AI predictions:', predictions);
 
-        // Calculate pricing for detected items
-        const { totalCost, itemBreakdown } = calculateEstimateTotal(predictions);
+        // Calculate pricing for detected items using JunkVizion model
+        const pricingResult = calculateEstimateTotal(predictions);
+        const { totalCost, breakdown } = pricingResult;
 
-        const itemCount = Object.keys(itemBreakdown).length;
-        const breakdownText = Object.entries(itemBreakdown)
-          .map(([item, details]) => `${item}: $${(details as { cost: number }).cost}`)
-          .join('\n');
+        // Build detailed estimate message
+        const itemCount = Object.keys(breakdown.detectedItems).length;
+        let estimateMessage = `🚛 Truck Space Used: ${breakdown.sectionsUsed}/4 sections ($${breakdown.baseCost})\n\n`;
 
-        const estimateMessage = `Found ${itemCount} items:\n${breakdownText}\n\nTotal Estimate: $${totalCost}`;
+        if (breakdown.surchargeCost > 0) {
+          estimateMessage += `⚠️ Heavy Item Surcharges: $${breakdown.surchargeCost}\n\n`;
+        }
+
+        estimateMessage += `♻️ Environmental Fees: $${breakdown.environmentalCost}\n\n`;
+        estimateMessage += `📦 Detected Items:\n`;
+
+        const itemBreakdown = Object.entries(breakdown.detectedItems);
+        itemBreakdown.forEach(([itemName, itemData]) => {
+          estimateMessage += `${itemName} (${itemData.count}x)\n`;
+        });
+
+        estimateMessage += `\n💰 TOTAL ESTIMATE: $${totalCost}`;
+
+        // Add disclaimer
+        const disclaimer = "\n\n*Prices exclude fuel surcharges and may vary by location. Final quote provided upon inspection.";
 
         Alert.alert(
           'JunkVizion Estimate! 💰',
-          estimateMessage,
+          estimateMessage + disclaimer,
           [{ text: 'Take Another Photo' }, { text: 'Done', onPress: () => navigation.goBack() }]
         );
       } catch (error) {
