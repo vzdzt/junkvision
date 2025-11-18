@@ -456,7 +456,7 @@ __🎯 REGARDING OUR NEXT STEPS__
 - Basic Expo React Native + TypeScript project initialized
 - Hello World app structure present
 - Development server operational (web version running)
-- Git repository initialized locally & on GitHub (https://github.com/vzdzt/junkvision)
+- Git repository initialized locally & on GitHub (https://github.com/vzdzt/junkvizion)
 - React Navigation dependencies configured
 - Project ready for AI integration phase
 
@@ -647,7 +647,7 @@ junkvision/
 - [Expo Documentation](https://docs.expo.dev/)
 - [React Navigation Docs](https://reactnavigation.org/docs/getting-started/)
 - [Google ML Kit Vision API](https://developers.google.com/ml-kit/vision/object-detection)
-- [GitHub Repo](https://github.com/vzdzt/junkvision)
+- [GitHub Repo](https://github.com/vzdzt/junkvizion)
 
 ---
 

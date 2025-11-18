@@ -36,8 +36,8 @@ Revolutionizing the junk removal industry by treating customers like CEOs - no s
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/vzdzt/junkvision.git
-   cd junkvision
+   git clone https://github.com/vzdzt/junkvizion.git
+   cd junkvizion
    ```
 
 2. **Install dependencies**
@@ -108,7 +108,7 @@ This project is private for business development.
 ## 📞 Contact
 
 For questions or collaboration:
-- GitHub Issues: [Create Issue](https://github.com/vzdzt/junkvision/issues)
+- GitHub Issues: [Create Issue](https://github.com/vzdzt/junkvizion/issues)
 - Project Lead: See contributors
 
 ---
