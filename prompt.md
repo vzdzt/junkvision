@@ -103,7 +103,7 @@ junkvision/
 
 2. **Pricing Algorithm**
    - Status: Completed ✅
-   - Details: Implemented real business pricing model with Penske truck sections, item surcharges, and $200/ton environmental fees
+   - Details: Volume-calibrated pricing with 16ft Penske truck specs (900 cu ft total, 225 cu ft/quarter), real item volumes, sections + surcharges + environmental fees
    - Responsible: Dev team
    - Priority: High
 
