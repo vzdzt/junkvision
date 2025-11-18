@@ -6,8 +6,14 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { CameraScreenNavigationProp } from '../types/navigation';
 
 // JunkVizion Pricing Model (based on real Penske 16ft truck rates)
+// Truck Specifications: 16ft x 7.5ft x 7.5ft = ~900 cubic feet total
 // Base: $1500 for full truck load (16ft Penske truck)
-// Split: $375 per quarter-section (assumes 4 equal sections)
+// Split: $375 per quarter-section (~225 cubic feet each, assumes 4 equal sections)
+//
+// Volume Calculations (refined for accuracy):
+// - Small section: ~225 cu ft ($375)
+// - Medium section: ~450 cu ft ($750)
+// - Large section: ~900 cu ft ($1500)
 //
 // All prices exclude:
 // - Surcharges for heavy/special items
@@ -15,31 +21,39 @@ import { CameraScreenNavigationProp } from '../types/navigation';
 // - Fuel surcharge (varies by location)
 
 const BASE_PRICING = {
-  // Quarter truck sections ($375 base per section)
-  // Items are categorized by size/space requirements
+  // Small Items (25% truck volume = ~225 cu ft)
   small_items: {
-    // Single items that fit in small space
-    chair: { spaceRequired: 0.25 }, // 1/4 section = $375
-    microwave: { spaceRequired: 0.25 },
-    television: { spaceRequired: 0.25 },
-    computer: { spaceRequired: 0.25 },
-    box: { spaceRequired: 0.25 },
-    trash_can: { spaceRequired: 0.25 },
+    chair: { volumeCuFt: 15, spaceRequired: 0.25 }, // Chair ≈ 15 cu ft, 25% space
+    microwave: { volumeCuFt: 3, spaceRequired: 0.25 },  // Microwave ≈ 3 cu ft
+    television: { volumeCuFt: 10, spaceRequired: 0.25 }, // TV ≈ 10 cu ft
+    computer: { volumeCuFt: 5, spaceRequired: 0.25 },
+    box: { volumeCuFt: 5, spaceRequired: 0.25 }, // Standard moving box
+    trash_can: { volumeCuFt: 5, spaceRequired: 0.25 },
   },
 
+  // Medium Items (50% truck volume = ~450 cu ft)
   medium_items: {
-    // Items requiring medium space (half section)
-    table: { spaceRequired: 0.5 }, // 1/2 section = $750
-    washing_machine: { spaceRequired: 0.5 },
-    bed_frame: { spaceRequired: 0.5 },
+    table: { volumeCuFt: 50, spaceRequired: 0.5 }, // Dining table ≈ 50 cu ft
+    washing_machine: { volumeCuFt: 25, spaceRequired: 0.5 },
+    bed_frame: { volumeCuFt: 35, spaceRequired: 0.5 },
   },
 
+  // Large Items (100% truck volume = ~900 cu ft)
   large_items: {
-    // Items requiring full section or more
-    couch: { spaceRequired: 1.0 }, // Full section = $1500
-    refrigerator: { spaceRequired: 1.0 },
-    bed_complete: { spaceRequired: 1.0 }, // Mattress + boxspring
+    couch: { volumeCuFt: 150, spaceRequired: 1.0 }, // Sofa ≈ 150 cu ft
+    refrigerator: { volumeCuFt: 85, spaceRequired: 1.0 }, // Fridge ≈ 85 cu ft
+    bed_complete: { volumeCuFt: 120, spaceRequired: 1.0 }, // Bed + mattress ≈ 120 cu ft
   }
+};
+
+// Truck specifications for reference
+const TRUCK_SPECS = {
+  lengthFt: 16,
+  widthFt: 7.5,
+  heightFt: 7.5,
+  totalVolumeCuFt: 16 * 7.5 * 7.5, // ~900 cu ft
+  sectionVolumeCuFt: (16 * 7.5 * 7.5) / 4, // ~225 cu ft per section
+  weightCapacityLbs: 6000, // Approximately for pricing reference
 };
 
 const SURCHARGE_ITEMS = {
